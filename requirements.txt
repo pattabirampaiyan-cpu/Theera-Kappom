@@ -1,0 +1,6 @@
+streamlit
+firebase-admin
+google-generativeai
+plotly
+python-dotenv
+streamlit-option-menu
