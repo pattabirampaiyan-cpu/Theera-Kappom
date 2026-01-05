@@ -1,7 +1,7 @@
 import streamlit as st
 import firebase_admin
 from firebase_admin import auth as admin_auth
-from src.db import create_user_in_db, get_user_profile
+from src.db import create_user_in_db, get_user_profile, initialize_firebase
 
 def login_user(email, password):
     # Note: Firebase Admin SDK does NOT support Client-side Email/Password Login (verifyPassword).
@@ -54,5 +54,8 @@ def init_session():
         st.session_state.user = None
     if 'auth_token' not in st.session_state:
         st.session_state.auth_token = None
+    
+    # Ensure Firebase is initialized
+    initialize_firebase()
 
 import os
