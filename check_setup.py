@@ -40,6 +40,12 @@ try:
 except ImportError as e:
     print(f"Error: streamlit-option-menu missing or failed: {e}")
 
+try:
+    import pyrebase
+    print("Mask: pyrebase [OK]")
+except ImportError as e:
+    print(f"Error: pyrebase missing or failed: {e}")
+
 print("\nChecking local modules...")
 try:
     import src.auth

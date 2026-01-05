@@ -74,7 +74,7 @@ def login_page():
                 user = signup_user(new_email, new_pass)
                 if user:
                     # Create Firestore Profile
-                    create_user_in_db(user.uid, new_email, new_username, pk_state, pk_region, pk_age)
+                    create_user_in_db(user['localId'], new_email, new_username, pk_state, pk_region, pk_age)
                     
                     # Auto-login (simulate or ask to login)
                     st.success("Account created! Please login.")

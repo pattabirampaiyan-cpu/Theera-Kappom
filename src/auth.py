@@ -1,52 +1,69 @@
 import streamlit as st
-import firebase_admin
-from firebase_admin import auth as admin_auth
+import pyrebase
+import os
 from src.db import create_user_in_db, get_user_profile, initialize_firebase
 
-def login_user(email, password):
-    # Note: Firebase Admin SDK does NOT support Client-side Email/Password Login (verifyPassword).
-    # It is a specialized SDK for server-side management.
-    # For a Streamlit-only managed solution without a frontend JS SDK, we would typically use the Identity Toolkit API REST endpoint.
-    # However, to keep it "Code Only" and robust, we will simulate the flow or requires the user's WEB API KEY.
-    # Using a helper for REST API login if key is available.
-    
-    # For this implementation foundation, we will rely on a mock successful login if we can't hit the real endpoint 
-    # OR we implement the REST call which is the standard way for python clients.
-    
-    # We need the Web API Key for this.
+def get_pyrebase_auth():
     try:
-        # To make this real, we need the API KEY. I'll prompt for it in UI if missing, or use a placeholder.
-        # Ideally, we use pyrebase4 or requests.
-        import requests
-        import json
-        
-        web_api_key = st.secrets.get("firebase", {}).get("web_api_key") or os.environ.get("FIREBASE_WEB_API_KEY")
-        if not web_api_key:
-            st.error("Missing Firebase Web API Key for Authentication. Please add it to secrets/env.")
+        # Use secrets if available, otherwise try env or fail gracefully
+        # User snippet specifically asked for secrets mapping
+        if "firebase" not in st.secrets:
+            # Fallback for when secrets aren't set up yet? 
+            # Or just let it fail so user knows to add them.
             return None
 
-        request_url = f"https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key={web_api_key}"
-        headers = {"Content-Type": "application/json"}
-        data = {"email": email, "password": password, "returnSecureToken": True}
+        firebase_config = {
+            "apiKey": st.secrets["firebase"].get("apiKey", ""),
+            "authDomain": st.secrets["firebase"].get("authDomain", ""),
+            "projectId": st.secrets["firebase"].get("projectId", ""),
+            "storageBucket": st.secrets["firebase"].get("storageBucket", ""),
+            "messagingSenderId": st.secrets["firebase"].get("messagingSenderId", ""),
+            "appId": st.secrets["firebase"].get("appId", ""),
+            "databaseURL": "" # Required by pyrebase4 even if empty
+        }
         
-        response = requests.post(request_url, headers=headers, data=json.dumps(data))
-        response.raise_for_status()
-        return response.json() # Contains localId (uid), idToken, etc.
-        
+        firebase = pyrebase.initialize_app(firebase_config)
+        return firebase.auth()
     except Exception as e:
-        # st.error(f"Login failed: {e}") # Let the UI handle error display
+        # Silent fail or log? Better to let user know config is wrong if they try to login
+        # We'll handle exceptions in login/signup
+        raise e
+
+def login_user(email, password):
+    try:
+        auth = get_pyrebase_auth()
+        if not auth:
+            st.error("Firebase Configuration missing in secrets.")
+            return None
+            
+        user = auth.sign_in_with_email_and_password(email, password)
+        return user
+    except Exception as e:
+        # Parse error message for better UI
+        error_msg = str(e)
+        if "INVALID_PASSWORD" in error_msg:
+            st.error("Incorrect password.")
+        elif "EMAIL_NOT_FOUND" in error_msg:
+            st.error("Email not found.")
+        else:
+            st.error(f"Login failed: {e}")
         return None
 
 def signup_user(email, password):
     try:
-        # Create user in Firebase Auth
-        user = admin_auth.create_user(
-            email=email,
-            password=password
-        )
+        auth = get_pyrebase_auth()
+        if not auth:
+            st.error("Firebase Configuration missing in secrets.")
+            return None
+            
+        user = auth.create_user_with_email_and_password(email, password)
         return user
     except Exception as e:
-        st.error(f"Signup Error: {e}")
+        error_msg = str(e)
+        if "EMAIL_EXISTS" in error_msg:
+             st.error("Email already exists.")
+        else:
+            st.error(f"Signup Error: {e}")
         return None
 
 def init_session():
@@ -55,7 +72,5 @@ def init_session():
     if 'auth_token' not in st.session_state:
         st.session_state.auth_token = None
     
-    # Ensure Firebase is initialized
+    # Ensure Firebase Admin is initialized (for Firestore)
     initialize_firebase()
-
-import os

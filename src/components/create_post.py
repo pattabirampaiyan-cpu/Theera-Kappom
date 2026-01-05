@@ -1,6 +1,7 @@
 import streamlit as st
 from src.ai_helper import moderate_content, summarize_content, suggest_hashtags
 from src.db import create_post
+import time
 
 def show_create_post():
     st.header("✍️ Speak Up for Change")
@@ -25,6 +26,10 @@ def show_create_post():
         # Submit for Review First
         submitted = st.form_submit_button("Analyze & Preview")
     
+    # Use session state to persist preview data
+    if 'post_preview' not in st.session_state:
+        st.session_state.post_preview = None
+
     if submitted:
         if not title or not content or not region:
             st.error("Please fill in all mandatory fields.")
@@ -43,31 +48,53 @@ def show_create_post():
                 summary = summarize_content(content)
                 tags = suggest_hashtags(content)
                 
-                st.subheader("Preview")
-                st.write(f"**Title:** {title}")
-                st.write(f"**Summary:** {summary}")
-                st.write(f"**Hashtags:** {' '.join(tags)}")
+                # Store in session state for the "Confirm" button to access
+                st.session_state.post_preview = {
+                    'title': title,
+                    'content': content,
+                    'category': category,
+                    'state': state,
+                    'region': region,
+                    'summary': summary,
+                    'tags': tags
+                }
+
+    # Show preview and confirm button if we have preview data
+    if st.session_state.post_preview:
+        preview = st.session_state.post_preview
+        st.divider()
+        st.subheader("Preview")
+        st.write(f"**Title:** {preview['title']}")
+        st.write(f"**Summary:** {preview['summary']}")
+        st.write(f"**Hashtags:** {' '.join(preview['tags'])}")
+        
+        # Tags editing
+        edited_tags = st.text_input("Edit Hashtags", value=" ".join(preview['tags']))
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("🚀 Confirm & Publish"):
+                post_data = {
+                    'author_uid': st.session_state.user['localId'],
+                    'author_username': st.session_state.user.get('email', 'Anonymous').split('@')[0],
+                    'title': preview['title'],
+                    'content': preview['content'],
+                    'category': preview['category'],
+                    'hashtags': edited_tags.split(),
+                    'state': preview['state'],
+                    'region': preview['region'],
+                    'ai_summary': preview['summary'],
+                    'image_url': None
+                }
                 
-                # Tags editing
-                final_tags = st.text_input("Edit Hashtags", value=" ".join(tags))
-                
-                # Final Confirmation
-                if st.button("Confirm & Post"):
-                    post_data = {
-                        'author_uid': st.session_state.user['localId'],
-                        'author_username': st.session_state.user.get('email', 'Anonymous').split('@')[0], # Fallback
-                        'title': title,
-                        'content': content,
-                        'category': category,
-                        'hashtags': final_tags.split(),
-                        'state': state,
-                        'region': region,
-                        'ai_summary': summary,
-                        'image_url': None # Placeholder for now
-                    }
-                    
-                    if create_post(post_data):
-                        st.success("Post published successfully!")
-                        # Ideally redirect or clear form
-                    else:
-                        st.error("Failed to publish post. Try again.")
+                if create_post(post_data):
+                    st.success("Post published successfully!")
+                    st.session_state.post_preview = None # Clear after success
+                    time.sleep(1)
+                    st.rerun()
+                else:
+                    st.error("Failed to publish post. Try again.")
+        with col2:
+            if st.button("🗑️ Cancel"):
+                st.session_state.post_preview = None
+                st.rerun()
